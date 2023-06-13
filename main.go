@@ -177,7 +177,7 @@ func promptFields(r io.Reader, catID string) (ucsFilename, error) {
 	}
 
 	var err error
-	f.fxName, err = prompt(r, "FX Name", "")
+	f.fxName, err = prompt(r, "FX Name", required, "")
 	if err != nil {
 		return f, err
 	}
@@ -185,7 +185,7 @@ func promptFields(r io.Reader, catID string) (ucsFilename, error) {
 		return f, fmt.Errorf("FXName is required")
 	}
 
-	f.creatorID, err = prompt(r, "Creator ID", "UCS_CREATOR_ID")
+	f.creatorID, err = prompt(r, "Creator ID", required, "UCS_CREATOR_ID")
 	if err != nil {
 		return f, err
 	}
@@ -193,7 +193,7 @@ func promptFields(r io.Reader, catID string) (ucsFilename, error) {
 		return f, fmt.Errorf("CreatorID is required")
 	}
 
-	f.sourceID, err = prompt(r, "Source ID", "UCS_SOURCE_ID")
+	f.sourceID, err = prompt(r, "Source ID", required, "UCS_SOURCE_ID")
 	if err != nil {
 		return f, err
 	}
@@ -201,7 +201,7 @@ func promptFields(r io.Reader, catID string) (ucsFilename, error) {
 		return f, fmt.Errorf("SourceID is required")
 	}
 
-	f.userData, err = prompt(r, "User Data (Optional)", "UCS_USER_DATA")
+	f.userData, err = prompt(r, "User Data", optional, "UCS_USER_DATA")
 	if err != nil {
 		return f, err
 	}
@@ -217,11 +217,18 @@ func (f ucsFilename) render(ext string) string {
 	return strings.Join(segs, "_") + ext
 }
 
-func prompt(r io.Reader, fieldName string, defaultEnv string) (string, error) {
-	if defaultEnv != "" {
-		defaultValue := os.Getenv(defaultEnv)
-		if defaultValue != "" {
-			return defaultValue, nil
+type requirement int
+
+const (
+	required requirement = iota
+	optional
+)
+
+func prompt(r io.Reader, fieldName string, req requirement, envOverrideVar string) (string, error) {
+	if envOverrideVar != "" {
+		val := os.Getenv(envOverrideVar)
+		if val != "" {
+			return val, nil
 		}
 	}
 
@@ -232,12 +239,15 @@ func prompt(r io.Reader, fieldName string, defaultEnv string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if strings.Contains(text, "_") {
+		trimmed := strings.TrimSpace(text)
+		if req == required && trimmed == "" {
+			fmt.Printf("Invalid: %s is required\n", fieldName)
+			continue
+		}
+		if strings.Contains(trimmed, "_") {
 			fmt.Println("Invalid: value cannot contain \"_\", because it is the filename field delimiter")
 			continue
 		}
-
-		trimmed := strings.TrimSpace(text)
 		return strings.Join(strings.Fields(trimmed), "-"), nil
 	}
 }
