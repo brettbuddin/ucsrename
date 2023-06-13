@@ -177,7 +177,7 @@ func promptFields(r io.Reader, catID string) (ucsFilename, error) {
 	}
 
 	var err error
-	f.fxName, err = prompt(os.Stdin, "FX Name", "")
+	f.fxName, err = prompt(r, "FX Name", "")
 	if err != nil {
 		return f, err
 	}
