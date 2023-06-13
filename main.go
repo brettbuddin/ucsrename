@@ -18,7 +18,7 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-//go:embed UCS-v8.1.csv
+//go:embed *.csv
 var content embed.FS
 
 func main() {
@@ -46,7 +46,7 @@ func openCSV() (fs.File, error) {
 	if fp := os.Getenv("UCS_CSV_FILE"); fp != "" {
 		return os.Open(fp)
 	}
-	return content.Open("UCS-v8.1.csv")
+	return content.Open("UCS-v8.2.csv")
 }
 
 func printCategories() error {
