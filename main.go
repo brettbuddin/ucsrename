@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,13 +33,24 @@ func main() {
 
 func run() error {
 	if isInteractive(os.Stdout) {
-		return runInteractive()
+		fzfExec, err := exec.LookPath("fzf")
+		if err != nil {
+			return err
+		}
+		return runInteractive(fzfExec)
 	}
 	return printCategories()
 }
 
+func openCSV() (fs.File, error) {
+	if fp := os.Getenv("UCS_CSV_FILE"); fp != "" {
+		return os.Open(fp)
+	}
+	return content.Open("UCS-v8.1.csv")
+}
+
 func printCategories() error {
-	f, err := content.Open("UCS-v8.1.csv")
+	f, err := openCSV()
 	if err != nil {
 		return err
 	}
@@ -77,7 +89,7 @@ type ucsItem struct {
 	Synonyms    string
 }
 
-func runInteractive() error {
+func runInteractive(fzfExec string) error {
 	var forceConfirm bool
 	fs := flag.NewFlagSet("ucsrename", flag.ContinueOnError)
 	fs.BoolVar(&forceConfirm, "y", false, "force confirm rename")
@@ -98,7 +110,7 @@ func runInteractive() error {
 		return fmt.Errorf("no file name extension found")
 	}
 
-	f, err := newUCSFilename()
+	f, err := newUCSFilename(fzfExec)
 	if err != nil {
 		return err
 	}
@@ -119,26 +131,18 @@ func runInteractive() error {
 		case "n", "no":
 			return nil
 		default:
+			return nil
 		}
 	}
 
-	return nil
-}
-
-func fzfInstalled() bool {
-	v, _ := exec.LookPath("fzf")
-	if v != "" {
-		return true
-	}
-	return false
 }
 
 func isInteractive(stdout *os.File) bool {
-	return isatty.IsTerminal(stdout.Fd()) && fzfInstalled()
+	return isatty.IsTerminal(stdout.Fd())
 }
 
-func newUCSFilename() (ucsFilename, error) {
-	cmd := exec.Command("fzf", "--ansi", "--no-preview")
+func newUCSFilename(fzfExec string) (ucsFilename, error) {
+	cmd := exec.Command(fzfExec, "--ansi", "--no-preview")
 	var out bytes.Buffer
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
@@ -178,26 +182,26 @@ func promptFields(r io.Reader, catID string) (ucsFilename, error) {
 		return f, err
 	}
 	if f.fxName == "" {
-		return f, fmt.Errorf("FXName is required.")
+		return f, fmt.Errorf("FXName is required")
 	}
 
-	f.creatorID, err = prompt(os.Stdin, "Creator ID", "UCS_CREATOR_ID")
+	f.creatorID, err = prompt(r, "Creator ID", "UCS_CREATOR_ID")
 	if err != nil {
 		return f, err
 	}
 	if f.creatorID == "" {
-		return f, fmt.Errorf("CreatorID is required.")
+		return f, fmt.Errorf("CreatorID is required")
 	}
 
-	f.sourceID, err = prompt(os.Stdin, "Source ID", "UCS_SOURCE_ID")
+	f.sourceID, err = prompt(r, "Source ID", "UCS_SOURCE_ID")
 	if err != nil {
 		return f, err
 	}
 	if f.sourceID == "" {
-		return f, fmt.Errorf("SourceID is required.")
+		return f, fmt.Errorf("SourceID is required")
 	}
 
-	f.userData, err = prompt(os.Stdin, "User Data (Optional)", "UCS_USER_DATA")
+	f.userData, err = prompt(r, "User Data (Optional)", "UCS_USER_DATA")
 	if err != nil {
 		return f, err
 	}
@@ -221,17 +225,25 @@ func prompt(r io.Reader, fieldName string, defaultEnv string) (string, error) {
 		}
 	}
 
-	fmt.Printf("%s: ", fieldName)
-	reader := bufio.NewReader(r)
-	text, err := reader.ReadString('\n')
-	if err != nil {
-		return "", err
+	for {
+		fmt.Printf("Enter %s: ", fieldName)
+		reader := bufio.NewReader(r)
+		text, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		}
+		if strings.Contains(text, "_") {
+			fmt.Println("Invalid: value cannot contain \"_\", because it is the filename field delimiter")
+			continue
+		}
+
+		trimmed := strings.TrimSpace(text)
+		return strings.Join(strings.Fields(trimmed), "-"), nil
 	}
-	return strings.TrimSpace(text), nil
 }
 
 var usage = `
-ucsrename renames files using Universal Category System (UCS) filename pattern. 
+ucsrename renames files using Universal Category System (UCS) filename pattern.
 
 Usage:
 	
@@ -246,10 +258,24 @@ Here's the layout of the filename that it produces:
 CatID, FXName, CreatorID and SourceID are required fields. The UserData field is
 optional and can be to specify information not captured by the UCS standard.
 
+The program will prompt you for all fields, but some fields can be skipped by setting one of the
+following environment variables:
+
+- UCS_CREATOR_ID
+- UCS_SOURCE_ID
+- UCS_USER_DATA
+
+Once a variable is set in the environment, the program will use that value instead of prompting the
+user. This is useful for relatively static fields like CreatorID and SourceID.
+
 fzf is required to provide a helpful, filterable, list of category IDs.
 
 The UCS project has a great video outlining the filename structure:
 https://www.youtube.com/watch?v=0s3ioIbNXSM
+
+A UCS CSV is embedded in the program, but that file can be overridden by setting UCS_CSV_FILE
+environment variable. Once set, all invocations will use that file instead of the embedded UCS CSV
+file.
 `
 
 func usageFn(fs *flag.FlagSet) func() {
