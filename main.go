@@ -98,7 +98,13 @@ func runInteractive(fzfExec string) error {
 		return err
 	}
 
-	srcFileInfo, err := os.Stat(fs.Arg(0))
+	name := fs.Arg(0)
+	if name == "" {
+		fs.Usage()
+		return nil
+	}
+
+	srcFileInfo, err := os.Stat(name)
 	if err != nil {
 		return err
 	}
