@@ -16,6 +16,21 @@ import (
 	"github.com/brettbuddin/ucsrename/ucs"
 )
 
+func NewDefault() (Renamer, error) {
+	fzfExec, err := exec.LookPath("fzf")
+	if err != nil {
+		return Renamer{}, err
+	}
+
+	return Renamer{
+		SelfCommand: os.Args[0],
+		Stdin:       os.Stdin,
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
+		FZFExec:     fzfExec,
+	}, nil
+}
+
 // Renamer is an interactive renamer for UCS filenames.
 type Renamer struct {
 	SelfCommand string

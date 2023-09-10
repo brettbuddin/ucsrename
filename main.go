@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 
 	"github.com/brettbuddin/ucsrename/renamer"
 	"github.com/brettbuddin/ucsrename/ucs"
@@ -43,18 +42,9 @@ func run() error {
 		fs.Usage()
 		return nil
 	}
-
-	fzfExec, err := exec.LookPath("fzf")
+	r, err := renamer.NewDefault()
 	if err != nil {
 		return err
-	}
-
-	r := renamer.Renamer{
-		SelfCommand: os.Args[0],
-		Stdin:       os.Stdin,
-		Stdout:      os.Stdout,
-		Stderr:      os.Stderr,
-		FZFExec:     fzfExec,
 	}
 	return r.Run(filename, forceConfirm)
 }
